@@ -1,11 +1,8 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-// #![feature(macro_at_most_once_rep)]
-
-use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
-use std::borrow::{Borrow, Cow};
-use std::mem;
+use std::{
+    fmt::{self, Debug, Display, Formatter},
+    borrow::Cow,
+    mem
+};
 
 pub trait Concat<T = Self>
 where T: ?Sized,
@@ -34,6 +31,7 @@ impl<'a> Concat for Cow<'a, str> {
         Cow::Owned(owned)
     }
 }
+
 
 pub struct LazyConcat<'a, T> 
 where
@@ -74,6 +72,11 @@ where
     pub fn is_normal(&self) -> bool {
         self.fragments.len() == 0
     }
+
+    pub fn get_normal(&mut self) -> &Option<T::Owned> {
+        self.normalize();
+        &self.root
+   }
 }
 
 impl<'a, T> Debug for LazyConcat<'a, T> 
@@ -97,7 +100,7 @@ where
     T: ToOwned + ?Sized + Display,
     T::Owned: Display,
 {
-    // TODO: Normalize first - will require interior mutability
+    // TODO: Normalize first - will require interior mutability or consume-self
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         if let Some(root) = &self.root {
             write!(f, "{}", root)?;
@@ -109,30 +112,6 @@ where
     }
 }
 
-
-impl<'a> Borrow<str> for LazyConcat<'a, String> {
-    fn borrow(&self) -> &str {
-        ""
-    }
-}
-
-// impl<'a, T> ToOwned for LazyConcat<'a, T>
-// where
-//     T: ToOwned + 'a + ?Sized,
-//     T::Owned: Concat<T> + Default,
-// {
-//     type Owned = T::Owned;
-//     fn to_owned(mut self) -> Self::Owned {
-//         self.normalize();
-//         if self.root.is_some () {
-//             self.root.unwrap()
-//         } else {
-//             T::Owned::default()
-//         }
-//     }
-// }
-
-
 #[cfg(test)]
 mod tests {
     #![allow(unused_variables)]
@@ -141,29 +120,19 @@ mod tests {
     #[test]
     fn test_1() {
         let a = "hel";
-        let b = "l";
-        let c = "o the";
-        let d = "re!";
+        let b = "lo the";
+        let c = "re!";
         let mut lz: LazyConcat<str> = LazyConcat::new();
         lz.concat(a);
         lz.concat(b);
-
-        println!("lz debug: {:?}", lz);
-        println!("lz display: {}", lz);
-
-        lz.normalize();
-
         lz.concat(c);
-        lz.concat(d);
 
-
-        println!("2 lz debug: {:?}", lz);
-        println!("2 lz display: {}", lz);
-
+        assert_eq!(false, lz.is_normal());
+        assert_eq!("hello there!", format!("{}", lz));
+        assert_eq!(false, lz.is_normal());
 
         lz.normalize();
-        println!("3 lz debug: {:?}", lz);
-        println!("3 lz display: {}", lz);
-        assert!(false);
+        assert_eq!(true, lz.is_normal());
+        assert_eq!("hello there!", format!("{}", lz));
     }
 }
