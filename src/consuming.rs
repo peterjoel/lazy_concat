@@ -36,6 +36,16 @@ where
         LazyConcat { root: self.root, fragments: self.fragments, phantom: PhantomData }
     } 
 
+    pub fn concat(mut self, fragment: B) -> LazyConcat<T, B, Fragmented> {
+        self.fragments.push(fragment);
+        self.change_type()
+    }
+}
+
+impl<T, B> LazyConcat<T, B, Fragmented>
+where
+    T: Concat<B, Output = T>
+{
     pub fn normalize(mut self) -> LazyConcat<T, B, Normalized> {
         {
             let fragments = self.fragments.drain(..);
@@ -43,10 +53,11 @@ where
         }
         self.change_type()
     }
+}
 
-    pub fn concat(mut self, fragment: B) -> LazyConcat<T, B, Fragmented> {
-        self.fragments.push(fragment);
-        self.change_type()
+impl<T, B> LazyConcat<T, B, Normalized> {
+    pub fn done(self) -> T {
+        self.root
     }
 }
 
@@ -90,7 +101,7 @@ mod tests {
         let a = "hel";
         let b = "lo the";
         let c = "re!";
-        let lz = LazyConcat::new(String::from(""))
+        let lz = LazyConcat::new(String::new())
             .concat(a)
             .concat(b)
             .concat(c);
@@ -99,5 +110,8 @@ mod tests {
 
         let lz = lz.normalize();
         assert_eq!("hello there!", format!("{}", lz));
+
+        let res = lz.done();
+        assert_eq!("hello there!", res);
     }
 }

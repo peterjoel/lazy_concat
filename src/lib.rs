@@ -1,4 +1,3 @@
-
 pub mod consuming;
 pub mod concat;
 
@@ -17,7 +16,7 @@ mod mutating {
         where
             T: Concat<B, Output = T> + Default
     {
-        
+
         pub fn new(initial: T) -> LazyConcat<T, B> {
             LazyConcat::Normalized(ConsumingLazyCat::new(initial))
         }
@@ -35,8 +34,11 @@ mod mutating {
         }
         
         pub fn normalize(&mut self) {
+            if let LazyConcat::Normalized(_) = self {
+                return;
+            }
             let mutated = match mem::replace(self, LazyConcat::new(T::default())) {
-                LazyConcat::Normalized(lz) => LazyConcat::Normalized(lz.normalize()),
+                LazyConcat::Normalized(_) => unreachable!(),
                 LazyConcat::Fragmented(lz) => LazyConcat::Normalized(lz.normalize()),
             };
             mem::replace(self, mutated);
