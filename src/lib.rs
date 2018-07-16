@@ -13,8 +13,8 @@ mod mutating {
     }
 
     impl<T, B> LazyConcat<T, B> 
-        where
-            T: Concat<B, Output = T> + Default
+    where
+        T: Concat<B> + Default,
     {
 
         pub fn new(initial: T) -> LazyConcat<T, B> {
