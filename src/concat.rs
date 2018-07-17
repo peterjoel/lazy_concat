@@ -1,7 +1,14 @@
 use std::borrow::{Cow, Borrow};
 use std::ffi::{OsStr, OsString};
 use std::ops::Deref;
+use std::rc::Rc;
 
+/// Concatenation onto an owned value. 
+/// 
+/// Implementations are provided for `Vec<T>` and `String`, and other common owned types,
+/// with a variety of compatible types that can be concatenated.
+/// 
+/// 
 pub trait Concat<T = Self>
 where
     T: ?Sized,
@@ -9,23 +16,81 @@ where
     fn concat(self, other: T) -> Self;
 }
 
-impl<'a, D: Deref<Target = str> + 'a> Concat<D> for String {
-    fn concat(mut self, other: D) -> Self {
-        self.push_str(&other);
+impl<'a, C> Concat<C> for String 
+where
+    C: AsRef<str>
+{
+    fn concat(mut self, other: C) -> Self {
+        self.push_str(other.as_ref());
         self
     }
 }
 
-impl<'a, D: Deref<Target = str> + 'a> Concat<D> for Cow<'a, str> {
-    fn concat(self, other: D) -> Cow<'a, str> {
-        let owned = self.into_owned();
-        Cow::Owned(owned.concat(&*other))
+// impl<'a> Concat<&'a str> for String {
+//     fn concat(mut self, other: &'a str) -> Self {
+//         self.push_str(&other);
+//         self
+//     }
+// }
+
+// impl Concat<String> for String {
+//     fn concat(mut self, other: String) -> Self {
+//         self.push_str(&other);
+//         self
+//     }
+// }
+
+// impl<'a> Concat<Cow<'a, str>> for String {
+//     fn concat(mut self, other: Cow<'a, str>) -> Self {
+//         self.push_str(&other);
+//         self
+//     }
+// }
+
+// impl<'a> Concat<Box<&'a str>> for String {
+//     fn concat(mut self, other: Box<&'a str>) -> Self {
+//         self.push_str(&other);
+//         self
+//     }
+// }
+
+// impl Concat<Box<String>> for String {
+//     fn concat(mut self, other: Box<String>) -> Self {
+//         self.push_str(&other);
+//         self
+//     }
+// }
+
+// impl Concat<Rc<String>> for String {
+//     fn concat(mut self, other: Rc<String>) -> Self {
+//         self.push_str(&other);
+//         self
+//     }
+// }
+
+// impl<'a> Concat<Rc<&'a str>> for String {
+//     fn concat(mut self, other: Rc<&'a str>) -> Self {
+//         self.push_str(&other);
+//         self
+//     }
+// }
+
+impl<'a, B, C> Concat<C> for Cow<'a, B> 
+where
+    B: ?Sized + ToOwned,
+    <B as ToOwned>::Owned: Concat<C>,
+{
+    fn concat(self, other: C) -> Self {
+        Cow::Owned(self.into_owned().concat(other))
     }
 }
 
-impl<'a, D: Deref<Target = OsStr> + 'a> Concat<D> for OsString {
-        fn concat(mut self, other: D) -> OsString {
-        self.push(&*other);
+impl<'a, C> Concat<C> for OsString 
+where
+    C: AsRef<OsStr>,
+{
+    fn concat(mut self, other: C) -> Self {
+        self.push(other);
         self
     }
 }
@@ -101,6 +166,48 @@ mod tests {
     }
 
     #[test]
+    fn string_concat_cow() {
+        let s = String::from("abc");
+        let res: String = s.concat(Cow::from("123"));
+        assert_eq!(res, "abc123");
+    }
+
+    // #[test]
+    // fn string_concat_box_str() {
+    //     let s = String::from("abc");
+    //     let res: String = s.concat(Box::new("123"));
+    //     assert_eq!(res, "abc123");
+    // }
+
+    // #[test]
+    // fn string_concat_rc_str() {
+    //     let s = String::from("abc");
+    //     let res: String = s.concat(Rc::new("123"));
+    //     assert_eq!(res, "abc123");
+    // }
+
+    // #[test]
+    // fn string_concat_box_string() {
+    //     let s = String::from("abc");
+    //     let res: String = s.concat(Box::new(String::from("123")));
+    //     assert_eq!(res, "abc123");
+    // }
+
+    // #[test]
+    // fn string_concat_rc_string() {
+    //     let s = String::from("abc");
+    //     let res: String = s.concat(Rc::new(String::from("123")));
+    //     assert_eq!(res, "abc123");
+    // }
+
+    #[test]
+    fn string_concat_multi() {
+        let s = String::from("abc");
+        let res: String = s.concat("12").concat(Cow::from("3"));
+        assert_eq!(res, "abc123");
+    }
+
+    #[test]
     fn cow_concat_str() {
         let s = Cow::from("abc");
         let res: Cow<str> = s.concat("123");
@@ -130,6 +237,13 @@ mod tests {
     }
     
     #[test]
+    fn osstring_concat_str() {
+        let s = OsString::from("abc");
+        let res: OsString = s.concat("123");
+        assert_eq!(res, OsString::from("abc123"));
+    }
+
+    #[test]
     fn vec_concat_slice() {
         let s = vec![1, 2, 3];
         let to_append = vec![4, 5];
@@ -156,6 +270,14 @@ mod tests {
         let s = vec![1, 2, 3];
         let to_append = vec![4, 5];
         let res: Vec<u32> = s.concat(to_append);
+        assert_eq!(res, vec![1, 2, 3, 4, 5]);
+    }
+
+     #[test]
+    fn cow_vec_concat_slice() {
+        let s = Cow::from(vec![1, 2, 3]);
+        let to_append = vec![4, 5];
+        let res: Cow<[u32]> = s.concat(&to_append[..]);
         assert_eq!(res, vec![1, 2, 3, 4, 5]);
     }
     
