@@ -1,5 +1,6 @@
 use std::borrow::{Cow, Borrow};
 use std::ffi::{OsStr, OsString};
+use std::ops::Deref;
 
 pub trait Concat<T = Self>
 where
@@ -8,51 +9,23 @@ where
     fn concat(self, other: T) -> Self;
 }
 
-impl Concat for String {
-    fn concat(mut self, other: Self) -> Self {
+impl<'a, D: Deref<Target = str> + 'a> Concat<D> for String {
+    fn concat(mut self, other: D) -> Self {
         self.push_str(&other);
         self
     }
 }
 
-impl<'a> Concat<char> for String {
-    fn concat(mut self, c: char) -> String {
-        self.push(c);
-        self
-    }
-}
-
-impl<'a> Concat<&'a str> for String {
-    fn concat(mut self, other: &str) -> String {
-        self.push_str(&other);
-        self
-    }
-}
-
-impl<'a> Concat<&'a str> for Cow<'a, str> {
-    fn concat(self, other: &'a str) -> Cow<'a, str> {
+impl<'a, D: Deref<Target = str> + 'a> Concat<D> for Cow<'a, str> {
+    fn concat(self, other: D) -> Cow<'a, str> {
         let owned = self.into_owned();
-        Cow::Owned(owned.concat(other))
+        Cow::Owned(owned.concat(&*other))
     }
 }
 
-impl<'a> Concat<String> for Cow<'a, str> {
-    fn concat(self, other: String) -> Cow<'a, str> {
-        let owned = self.into_owned();
-        Cow::Owned(owned.concat(other.borrow()))
-    }
-}
-
-impl<'a> Concat<Cow<'a, str>> for Cow<'a, str> {
-    fn concat(self, other: Cow<'a, str>) -> Cow<'a, str> {
-        let owned = self.into_owned();
-        Cow::Owned(owned.concat(other.borrow()))
-    }
-}
-
-impl<'a> Concat<&'a OsStr> for OsString {
-        fn concat(mut self, other: &'a OsStr) -> OsString {
-        self.push(other);
+impl<'a, D: Deref<Target = OsStr> + 'a> Concat<D> for OsString {
+        fn concat(mut self, other: D) -> OsString {
+        self.push(&*other);
         self
     }
 }
@@ -125,13 +98,6 @@ mod tests {
         let s = String::from("abc");
         let res: String = s.concat("123");
         assert_eq!(res, "abc123");
-    }
-
-    #[test]
-    fn string_concat_char() {
-        let s = String::from("abc");
-        let res: String = s.concat('1');
-        assert_eq!(res, "abc1");
     }
 
     #[test]
