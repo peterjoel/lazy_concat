@@ -1,7 +1,6 @@
 use std::borrow::{Cow, Borrow};
 use std::ffi::{OsStr, OsString};
-use std::ops::Deref;
-use std::rc::Rc;
+use std::cell::Ref;
 
 /// Concatenation onto an owned value. 
 /// 
@@ -16,64 +15,68 @@ where
     fn concat(self, other: T) -> Self;
 }
 
-impl<'a, C> Concat<C> for String 
-where
-    C: AsRef<str>
-{
-    fn concat(mut self, other: C) -> Self {
-        self.push_str(other.as_ref());
+// impl<'a, C> Concat<C> for String 
+// where
+//     C: Into<Cow<'a, str>>,
+// {
+//     fn concat(mut self, other: C) -> Self {
+//         self.push_str(&other.into());
+//         self
+//     }
+// }
+
+// impl<'a, C> Concat<C> for String 
+// where
+//     C: AsRef<&'a str>
+// {
+//     fn concat(mut self, other: C) -> Self {
+//         self.push_str(other.as_ref());
+//         self
+//     }
+// }
+
+impl<'a> Concat<&'a str> for String {
+    fn concat(mut self, other: &'a str) -> Self {
+        self.push_str(&other);
         self
     }
 }
 
-// impl<'a> Concat<&'a str> for String {
-//     fn concat(mut self, other: &'a str) -> Self {
-//         self.push_str(&other);
-//         self
-//     }
-// }
+impl Concat<String> for String {
+    fn concat(mut self, other: String) -> Self {
+        self.push_str(&other);
+        self
+    }
+}
 
-// impl Concat<String> for String {
-//     fn concat(mut self, other: String) -> Self {
-//         self.push_str(&other);
-//         self
-//     }
-// }
+impl<'a> Concat<Cow<'a, str>> for String {
+    fn concat(mut self, other: Cow<'a, str>) -> Self {
+        self.push_str(&other);
+        self
+    }
+}
 
-// impl<'a> Concat<Cow<'a, str>> for String {
-//     fn concat(mut self, other: Cow<'a, str>) -> Self {
-//         self.push_str(&other);
-//         self
-//     }
-// }
+impl<'a> Concat<Box<&'a str>> for String {
+    fn concat(mut self, other: Box<&'a str>) -> Self {
+        self.push_str(&other);
+        self
+    }
+}
 
-// impl<'a> Concat<Box<&'a str>> for String {
-//     fn concat(mut self, other: Box<&'a str>) -> Self {
-//         self.push_str(&other);
-//         self
-//     }
-// }
+impl Concat<Box<String>> for String {
+    fn concat(mut self, other: Box<String>) -> Self {
+        self.push_str(&other);
+        self
+    }
+}
 
-// impl Concat<Box<String>> for String {
-//     fn concat(mut self, other: Box<String>) -> Self {
-//         self.push_str(&other);
-//         self
-//     }
-// }
+impl<'a> Concat<Ref<'a, &'a str>> for String {
+    fn concat(mut self, other: Ref<'a, &'a str>) -> Self {
+        self.push_str(&other);
+        self
+    }
+}
 
-// impl Concat<Rc<String>> for String {
-//     fn concat(mut self, other: Rc<String>) -> Self {
-//         self.push_str(&other);
-//         self
-//     }
-// }
-
-// impl<'a> Concat<Rc<&'a str>> for String {
-//     fn concat(mut self, other: Rc<&'a str>) -> Self {
-//         self.push_str(&other);
-//         self
-//     }
-// }
 
 impl<'a, B, C> Concat<C> for Cow<'a, B> 
 where
@@ -172,33 +175,29 @@ mod tests {
         assert_eq!(res, "abc123");
     }
 
-    // #[test]
-    // fn string_concat_box_str() {
-    //     let s = String::from("abc");
-    //     let res: String = s.concat(Box::new("123"));
-    //     assert_eq!(res, "abc123");
-    // }
+    #[test]
+    fn string_concat_ref() {
+        use std::cell::RefCell;
+        let s = String::from("abc");
+        let c = RefCell::new("123");
+        let r = c.borrow();
+        let res: String = s.concat(r);
+        assert_eq!(res, "abc123");
+    }
 
-    // #[test]
-    // fn string_concat_rc_str() {
-    //     let s = String::from("abc");
-    //     let res: String = s.concat(Rc::new("123"));
-    //     assert_eq!(res, "abc123");
-    // }
+    #[test]
+    fn string_concat_box_str() {
+        let s = String::from("abc");
+        let res: String = s.concat(Box::new("123"));
+        assert_eq!(res, "abc123");
+    }
 
-    // #[test]
-    // fn string_concat_box_string() {
-    //     let s = String::from("abc");
-    //     let res: String = s.concat(Box::new(String::from("123")));
-    //     assert_eq!(res, "abc123");
-    // }
-
-    // #[test]
-    // fn string_concat_rc_string() {
-    //     let s = String::from("abc");
-    //     let res: String = s.concat(Rc::new(String::from("123")));
-    //     assert_eq!(res, "abc123");
-    // }
+    #[test]
+    fn string_concat_box_string() {
+        let s = String::from("abc");
+        let res: String = s.concat(Box::new(String::from("123")));
+        assert_eq!(res, "abc123");
+    }
 
     #[test]
     fn string_concat_multi() {
