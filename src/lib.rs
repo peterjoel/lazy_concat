@@ -31,17 +31,6 @@ mod mutating {
             };
             mem::replace(self, mutated);
         }
-
-        pub fn concat_later<M>(&mut self, thunk: M) 
-            where
-                M: Fn() -> B + 'static,
-        {
-            let mutated = match mem::replace(self, LazyConcat::new(T::default())) {
-                LazyConcat::Normalized(lz) => LazyConcat::Fragmented(lz.concat_later(thunk)),
-                LazyConcat::Fragmented(lz) => LazyConcat::Fragmented(lz.concat_later(thunk)),
-            };
-            mem::replace(self, mutated);
-        }
     
         pub fn normalize(&mut self) {
             if let LazyConcat::Normalized(_) = self {
