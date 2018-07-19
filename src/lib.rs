@@ -1,9 +1,14 @@
 use std::{
     fmt::{self, Debug, Formatter},
     borrow::{Cow, Borrow},
+    ops::RangeBounds,
+    mem,
 };
 
 pub mod concat;
+pub mod length;
+
+use length::Length;
 use concat::Concat;
 
 
@@ -39,6 +44,13 @@ where
             Fragment::Value(ref b) => b.borrow()
         }
     }
+
+    fn len(&self) -> usize 
+    where
+        B: Length,
+    {
+        self.borrow().len()
+    }
 }
 
 impl<'a, B> Debug for Fragment<'a, B> 
@@ -53,43 +65,50 @@ where
 
 impl<'a, T, B> LazyConcat<'a, T, B> 
 where
-    T: Concat<Cow<'a, B>> + Borrow<B>,
-    B: ToOwned<Owned = T> + ?Sized,
+    T: Concat<Cow<'a, B>> + Borrow<B> + Default + Length,
+    B: ToOwned<Owned = T> + ?Sized + Length,
 {
-    pub fn new(initial: T) -> LazyConcat<'a, T, B> {
+    pub fn new(initial: T) -> Self {
         LazyConcat { root: initial, fragments: Vec::new() }
     }
     
-    pub fn expecting_num_fragments(initial: T, n: usize) -> LazyConcat<'a, T, B> {
+    pub fn expecting_num_fragments(initial: T, n: usize) -> Self {
         LazyConcat { root: initial, fragments: Vec::with_capacity(n) }
     }
 
-    pub fn normalize(mut self) -> LazyConcat<'a, T, B> {
-        {
-            let fragments = self.fragments.drain(..);
-            self.root = fragments.fold(self.root, |agg, frag| agg.concat(frag.get()));
-        }
+    pub fn normalize(mut self) -> Self {
+        self.normalize_range(..);
         self
+    }
+
+    fn normalize_range<R: RangeBounds<usize>>(&mut self, range: R) {
+        let fragments = self.fragments.drain(range);
+        let root = mem::replace(&mut self.root, Default::default());
+        self.root = fragments.fold(root, |agg, frag| agg.concat(frag.get()));
+    }
+
+    /// Normalize at least `len` elements and return the number of elements that were actually normalized.
+    /// This could fail if there are not enough fragments to make up the required length, in which case
+    /// `None` is returned and no work is done.
+    pub fn normalize_to_len(&mut self, len: usize) -> Option<usize> {
+        if let Some(num) = self.fragments
+            .iter()
+            .scan(0, |total, ref fragment| {
+                *total += fragment.len();
+                Some(*total)
+            })
+            .position(|s| s >= len) 
+        {
+            self.normalize_range(..=num);
+            Some(self.root.len())
+        } else {
+            None
+        }
     }
 
     #[inline]
     pub fn done(self) -> T {
         self.normalize().root
-    }
-
-    #[inline]
-    pub fn get(&self) -> &T {
-        &self.root
-    }
-
-    pub fn concat_owned(mut self, fragment: B::Owned) -> Self {
-        self.fragments.push(Fragment::Value(Cow::Owned(fragment)));
-        self
-    }
-
-    pub fn concat_borrowed(mut self, fragment: &'a B) -> Self {
-        self.fragments.push(Fragment::Value(Cow::Borrowed(fragment)));
-        self
     }
 
     pub fn concat<F: Into<Cow<'a, B>>>(mut self, fragment: F) -> Self {
@@ -117,15 +136,13 @@ where
 
 impl<'a, T, B> From<T> for LazyConcat<'a, T, B> 
 where
-    T: Concat<Cow<'a, B>> + Borrow<B>,
-    B: ToOwned<Owned = T> + ?Sized,
+    T: Concat<Cow<'a, B>> + Borrow<B> + Default + Length,
+    B: ToOwned<Owned = T> + ?Sized + Length,
 {
     fn from(base: T) -> Self {
         LazyConcat::new(base)
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -148,5 +165,19 @@ mod tests {
 
         let res = lz.done();
         assert_eq!("hello there!", res);
+    }
+
+    #[test] 
+    fn normalize_to_len() {
+        let a = "hel";
+        let b = "lo the";
+        let c = "re!";
+        let mut lz = LazyConcat::new(String::new())
+            .concat(a)
+            .concat(b.to_owned())
+            .concat(c);
+        let res = lz.normalize_to_len(6);
+        assert_eq!(Some(9), res);
+        assert_eq!("LazyConcat { \"hello the\", \"re!\" }", format!("{:?}", lz));
     }
 }
