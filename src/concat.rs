@@ -129,6 +129,20 @@ impl<T> Concat<Vec<T>> for Vec<T> {
     }
 }
 
+impl<'a, T> Concat<Cow<'a, [T]>> for Vec<T> 
+where
+    [T]: ToOwned<Owned = Vec<T>>,
+    T: Clone,
+{
+    fn concat(mut self, other: Cow<'a, [T]>) -> Vec<T> {
+        match other {
+            Cow::Borrowed(slice) => self.extend_from_slice(slice),
+            Cow::Owned(vec) => self.extend(vec),
+        }
+        self
+    }
+}
+
 macro_rules! vec_concat_array {
     ($($n: expr),*) => {
         $(

@@ -1,3 +1,4 @@
+#![feature(collections_range)]
 use std::{
     fmt::{self, Debug, Formatter},
     borrow::{Cow, Borrow},
@@ -7,9 +8,11 @@ use std::{
 
 pub mod concat;
 pub mod length;
+pub mod sliceable;
 
 use length::Length;
 use concat::Concat;
+use sliceable::Sliceable;
 
 
 pub struct LazyConcat<'a, T, B> 
@@ -76,13 +79,13 @@ where
         LazyConcat { root: initial, fragments: Vec::with_capacity(n) }
     }
 
-    pub fn normalize(mut self) -> Self {
+    pub fn normalize(&mut self) {
         self.normalize_range(..);
-        self
     }
 
     fn normalize_range<R: RangeBounds<usize>>(&mut self, range: R) {
         let fragments = self.fragments.drain(range);
+        // TODO Remove Default requirement. This could be done by putting root in an Option perhaps.
         let root = mem::replace(&mut self.root, Default::default());
         self.root = fragments.fold(root, |agg, frag| agg.concat(frag.get()));
     }
@@ -106,9 +109,24 @@ where
         }
     }
 
+    // TODO replace from/to optionals with ranges: .., a.., ..b, a..=b etc
+    pub fn get_slice(&mut self, from: Option<usize>, to: Option<usize>) -> &T::Slice
+    where 
+        T: Sliceable
+    {
+        if let Some(n) = to {
+            self.normalize_to_len(n).expect("Cannot make slice: out of bounds!");
+        } else {
+            self.normalize();
+        }
+        self.root.get_slice(from, to)
+    }
+
+
     #[inline]
-    pub fn done(self) -> T {
-        self.normalize().root
+    pub fn done(mut self) -> T {
+        self.normalize();
+        self.root
     }
 
     pub fn concat<F: Into<Cow<'a, B>>>(mut self, fragment: F) -> Self {
@@ -153,14 +171,14 @@ mod tests {
         let a = "hel";
         let b = "lo the";
         let c = "re!";
-        let lz = LazyConcat::new(String::new())
+        let mut lz = LazyConcat::new(String::new())
             .concat(a)
             .concat(b.to_owned())
             .concat(c);
 
         assert_eq!("LazyConcat { \"\", \"hel\", \"lo the\", \"re!\" }", format!("{:?}", lz));
 
-        let lz = lz.normalize();
+        lz.normalize();
         assert_eq!("LazyConcat { \"hello there!\" }", format!("{:?}", lz));
 
         let res = lz.done();
@@ -179,5 +197,24 @@ mod tests {
         let res = lz.normalize_to_len(6);
         assert_eq!(Some(9), res);
         assert_eq!("LazyConcat { \"hello the\", \"re!\" }", format!("{:?}", lz));
+    }
+
+
+    #[test] 
+    fn normalize_slice() {
+        let a = vec![1,2,3];
+        let b = vec![4,5];
+        let c = vec![6,7,8];
+        let d = vec![9];
+        let mut lz = LazyConcat::new(Vec::new())
+            .concat(&a)
+            .concat(&b)
+            .concat(&c)
+            .concat(&d);
+        {
+            let slice = lz.get_slice(Some(1), Some(4));
+            assert_eq!(vec![2,3,4], slice);
+        }
+        assert_eq!("LazyConcat { [1, 2, 3, 4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
     }
 }
