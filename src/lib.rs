@@ -4,6 +4,7 @@ use std::{
     borrow::{Cow, Borrow},
     ops::RangeBounds,
     mem,
+    iter,
 };
 
 pub mod concat;
@@ -110,9 +111,9 @@ where
     }
 
     // TODO replace from/to optionals with ranges: .., a.., ..b, a..=b etc
-    pub fn get_slice(&mut self, from: Option<usize>, to: Option<usize>) -> &T::Slice
+    pub fn get_slice(&mut self, from: Option<usize>, to: Option<usize>) -> &B
     where 
-        T: Sliceable
+        T: Sliceable<Slice = B>
     {
         if let Some(n) = to {
             self.normalize_to_len(n).expect("Cannot make slice: out of bounds!");
@@ -120,6 +121,15 @@ where
             self.normalize();
         }
         self.root.get_slice(from, to)
+    }
+
+    fn fragments_iter(&self) -> impl Iterator<Item = &B>
+    where 
+        T: Sliceable<Slice = B>
+    {
+        iter::once(self.root.get_slice(None, None))
+            .chain(self.fragments.iter()
+            .map(Fragment::borrow))
     }
 
 
@@ -134,6 +144,16 @@ where
         self
     }
 }
+
+impl<'a> LazyConcat<'a, String, str> {
+    pub fn chars<'b>(&'b self) -> impl Iterator<Item = char> + 'b {
+        self.fragments_iter()
+            .flat_map(|slice| {
+                slice.chars()
+            })
+    }
+}
+
 
 impl<'a, T, B> Debug for LazyConcat<'a, T, B> 
 where
@@ -197,6 +217,22 @@ mod tests {
         let res = lz.normalize_to_len(6);
         assert_eq!(Some(9), res);
         assert_eq!("LazyConcat { \"hello the\", \"re!\" }", format!("{:?}", lz));
+    }
+
+    #[test] 
+    fn string_iter_chars() {
+        let a = "hel";
+        let b = "lo the";
+        let c = "re!";
+        let lz = LazyConcat::new(String::new())
+            .concat(a)
+            .concat(b.to_owned())
+            .concat(c);
+
+        let chars: Vec<char> = lz.chars().collect();
+        assert_eq!(vec!['h', 'e', 'l', 'l', 'o', ' ', 't', 'h', 'e', 'r', 'e', '!'], chars);
+        // should not have normalized it
+        assert_eq!("LazyConcat { \"\", \"hel\", \"lo the\", \"re!\" }", format!("{:?}", lz));
     }
 
 
