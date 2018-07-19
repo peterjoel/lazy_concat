@@ -1,5 +1,3 @@
-
-use std::ops::Index;
 use ::length::Length;
 
 pub trait Sliceable: Length {

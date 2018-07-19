@@ -1,4 +1,3 @@
-#![feature(collections_range)]
 use std::{
     fmt::{self, Debug, Formatter},
     borrow::{Cow, Borrow},
@@ -162,8 +161,6 @@ impl<'a, I: Clone> LazyConcat<'a, Vec<I>, [I]> {
             })
     }
 }
-
-
 
 impl<'a, T, B> Debug for LazyConcat<'a, T, B> 
 where
