@@ -154,6 +154,16 @@ impl<'a> LazyConcat<'a, String, str> {
     }
 }
 
+impl<'a, I: Clone> LazyConcat<'a, Vec<I>, [I]> {
+    pub fn iter(&self) -> impl Iterator<Item = &I> {
+        self.fragments_iter()
+            .flat_map(|slice| {
+                slice.iter()
+            })
+    }
+}
+
+
 
 impl<'a, T, B> Debug for LazyConcat<'a, T, B> 
 where
@@ -235,6 +245,24 @@ mod tests {
         assert_eq!("LazyConcat { \"\", \"hel\", \"lo the\", \"re!\" }", format!("{:?}", lz));
     }
 
+    #[test] 
+    fn vec_iter() {
+        let a = vec![1,2,3];
+        let b = vec![4,5];
+        let c = vec![6,7,8];
+        let d = vec![9];
+        let lz = LazyConcat::new(Vec::new())
+            .concat(&a)
+            .concat(&b)
+            .concat(&c)
+            .concat(&d);
+
+        let v: Vec<u32> = lz.iter().cloned().collect();
+        assert_eq!(vec![1, 2, 3, 4, 5, 6, 7, 8, 9], v);
+        // should not have normalized it
+        assert_eq!("LazyConcat { [], [1, 2, 3], [4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
+    }
+
 
     #[test] 
     fn normalize_slice() {
@@ -247,6 +275,7 @@ mod tests {
             .concat(&b)
             .concat(&c)
             .concat(&d);
+        assert_eq!("LazyConcat { [], [1, 2, 3], [4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
         {
             let slice = lz.get_slice(Some(1), Some(4));
             assert_eq!(vec![2,3,4], slice);
