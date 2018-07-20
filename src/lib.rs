@@ -147,8 +147,8 @@ where
 impl<'a> LazyConcat<'a, String, str> {
     pub fn chars<'b>(&'b self) -> impl Iterator<Item = char> + 'b {
         self.fragments_iter()
-            .flat_map(|slice| {
-                slice.chars()
+            .flat_map(|fragment| {
+                fragment.chars()
             })
     }
 }
@@ -158,6 +158,22 @@ impl<'a, I: Clone> LazyConcat<'a, Vec<I>, [I]> {
         self.fragments_iter()
             .flat_map(|slice| {
                 slice.iter()
+            })
+    }
+
+    pub fn into_iter<'b>(&'b self) -> impl Iterator<Item = I> + 'b {
+        self.fragments_iter()
+            .flat_map(|fragment| {
+                fragment.iter().cloned()
+            })
+    }
+}
+
+impl<'a> LazyConcat<'a, String, str> {
+    pub fn bytes<'b>(&'b self) -> impl Iterator<Item = u8> + 'b {
+        self.fragments_iter()
+            .flat_map(|fragment| {
+                fragment.bytes()
             })
     }
 }
@@ -240,6 +256,22 @@ mod tests {
         assert_eq!(vec!['h', 'e', 'l', 'l', 'o', ' ', 't', 'h', 'e', 'r', 'e', '!'], chars);
         // should not have normalized it
         assert_eq!("LazyConcat { \"\", \"hel\", \"lo the\", \"re!\" }", format!("{:?}", lz));
+    }
+
+    #[test] 
+    fn string_iter_bytes() {
+        let a = "形聲";
+        let b = "網";
+        let c = "网";
+        let lz = LazyConcat::new(String::new())
+            .concat(a)
+            .concat(b.to_owned())
+            .concat(c);
+
+        let chars: Vec<u8> = lz.bytes().collect();
+        assert_eq!(vec![229, 189, 162, 232, 129, 178, 231, 182, 178, 231, 189, 145], chars);
+        // should not have normalized it
+        assert_eq!("LazyConcat { \"\", \"形聲\", \"網\", \"网\" }", format!("{:?}", lz));
     }
 
     #[test] 
