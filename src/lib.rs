@@ -94,13 +94,15 @@ where
     /// This could fail if there are not enough fragments to make up the required length, in which case
     /// `None` is returned and no work is done.
     pub fn normalize_to_len(&mut self, len: usize) -> Option<usize> {
-        if let Some(num) = self.fragments
+        if self.root.len() >= len {
+            Some(self.root.len())
+        } else if let Some(num) = self.fragments
             .iter()
             .scan(0, |total, ref fragment| {
                 *total += fragment.len();
                 Some(*total)
             })
-            .position(|s| s >= len) 
+            .position(|s| s >= len - self.root.len()) 
         {
             self.normalize_range(..=num);
             Some(self.root.len())
@@ -308,6 +310,11 @@ mod tests {
         {
             let slice = lz.get_slice(Some(1), Some(4));
             assert_eq!(vec![2,3,4], slice);
+        }
+        assert_eq!("LazyConcat { [1, 2, 3, 4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
+        {
+            let slice = lz.get_slice(Some(2), Some(3));
+            assert_eq!(vec![3], slice);
         }
         assert_eq!("LazyConcat { [1, 2, 3, 4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
     }
