@@ -1,19 +1,20 @@
+#![feature(collections_range)]
+
 use std::{
     fmt::{self, Debug, Formatter},
     borrow::{Cow, Borrow},
-    ops::RangeBounds,
+    ops::{RangeBounds, Bound},
     mem,
     iter,
 };
 
-pub mod concat;
-pub mod length;
-pub mod sliceable;
+pub(crate) mod concat;
+pub(crate) mod length;
+pub(crate) mod sliceable;
 
-use length::Length;
-use concat::Concat;
-use sliceable::Sliceable;
-
+pub use length::Length;
+pub use concat::Concat;
+pub use sliceable::Sliceable;
 
 pub struct LazyConcat<'a, T, B> 
 where 
@@ -112,27 +113,30 @@ where
     }
 
     // TODO replace from/to optionals with ranges: .., a.., ..b, a..=b etc
-    pub fn get_slice(&mut self, from: Option<usize>, to: Option<usize>) -> &B
+    pub fn get_slice<R: RangeBounds<usize>>(&mut self, range: R) -> &B
     where 
         T: Sliceable<Slice = B>
     {
-        if let Some(n) = to {
-            self.normalize_to_len(n).expect("Cannot make slice: out of bounds!");
-        } else {
-            self.normalize();
+        match range.end_bound() {
+            Bound::Unbounded => self.normalize(),
+            Bound::Excluded(&n) => {
+                self.normalize_to_len(n).expect("Cannot make slice: Out of bounds!");
+            },
+            Bound::Included(&n) => {
+                self.normalize_to_len(n + 1).expect("Cannot make slice: Out of bounds!");
+            }
         }
-        self.root.get_slice(from, to)
+        self.root.get_slice(range)
     }
 
     fn fragments_iter(&self) -> impl Iterator<Item = &B>
     where 
         T: Sliceable<Slice = B>
     {
-        iter::once(self.root.get_slice(None, None))
+        iter::once(self.root.get_slice(..))
             .chain(self.fragments.iter()
             .map(Fragment::borrow))
     }
-
 
     #[inline]
     pub fn done(mut self) -> T {
@@ -294,7 +298,6 @@ mod tests {
         assert_eq!("LazyConcat { [], [1, 2, 3], [4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
     }
 
-
     #[test] 
     fn normalize_slice() {
         let a = vec![1,2,3];
@@ -308,12 +311,12 @@ mod tests {
             .concat(&d);
         assert_eq!("LazyConcat { [], [1, 2, 3], [4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
         {
-            let slice = lz.get_slice(Some(1), Some(4));
+            let slice = lz.get_slice(1 .. 4);
             assert_eq!(vec![2,3,4], slice);
         }
         assert_eq!("LazyConcat { [1, 2, 3, 4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
         {
-            let slice = lz.get_slice(Some(2), Some(3));
+            let slice = lz.get_slice(2 .. 3);
             assert_eq!(vec![3], slice);
         }
         assert_eq!("LazyConcat { [1, 2, 3, 4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));

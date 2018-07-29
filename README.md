@@ -52,6 +52,5 @@ You can also just force the allocation in the middle, as an intermediary step, u
 When you need a slice, it will only copy the minimum number of fragments required to create the contiguous memory needed by the size of slice you requested:
 
 ```Rust
-// Temporary syntax. It will implement ranges (e.g. `get_slice(..2)`) later
-let slice: &[u32] = lazy_vec.get_slice(None, Some(2));
+let slice: &[u32] = lazy_vec.get_slice(0..2);
 ```
