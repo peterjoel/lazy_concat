@@ -15,26 +15,6 @@ where
     fn concat(self, other: T) -> Self;
 }
 
-// impl<'a, C> Concat<C> for String 
-// where
-//     C: Into<Cow<'a, str>>,
-// {
-//     fn concat(mut self, other: C) -> Self {
-//         self.push_str(&other.into());
-//         self
-//     }
-// }
-
-// impl<'a, C> Concat<C> for String 
-// where
-//     C: AsRef<&'a str>
-// {
-//     fn concat(mut self, other: C) -> Self {
-//         self.push_str(other.as_ref());
-//         self
-//     }
-// }
-
 impl<'a> Concat<&'a str> for String {
     fn concat(mut self, other: &'a str) -> Self {
         self.push_str(&other);
@@ -76,7 +56,6 @@ impl<'a> Concat<Ref<'a, &'a str>> for String {
         self
     }
 }
-
 
 impl<'a, B, C> Concat<C> for Cow<'a, B> 
 where

@@ -1,5 +1,34 @@
-#![feature(collections_range)]
-
+//!
+//! Lazy concatenation of `String`s, `Vec`s and any other concatenable data structures. 
+//! 
+//! A `LazyConcat` owns a base structure and keeps track of fragments which can be 
+//! either borrowed or owned. The fragments are never actually concatenated until the 
+//! structure is normalized with `normalize()` or partially with `normalize_to_len()`.
+//! 
+//! When borrowing a slice, it is possible to normalize only the minimum number of 
+//! fragments required for the slice. Various iterators over `String` or `Vec` are 
+//! supported without the need to normalize first. 
+//! 
+//! # Examples
+//! 
+//! ```
+//! # use lazy_concat::LazyConcat;
+//! let mut lz = LazyConcat::new(Vec::new())
+//!     // Concatenating owned values
+//!     .concat(vec![0, 1, 2, 3, 4])
+//!     // And borrowed values
+//!     .concat(&[5, 6, 7, 8][..])
+//!     .concat(&[9, 10][..]);
+//! // This is possible without the above slice being concatenated
+//! for i in lz.iter() {
+//!     println!("i = {}", i);
+//! }
+//! // Actually concatenate enough values so that up to 6 elements can be sliced
+//! lz.normalize_to_len(6);
+//! let slice: &[i32] = lz.get_slice(2..6);
+//! assert_eq!(&[2, 3, 4, 5], slice);
+//! ```
+//! 
 use std::{
     fmt::{self, Debug, Formatter},
     borrow::{Cow, Borrow},
@@ -24,7 +53,7 @@ where
     fragments: Vec<Fragment<'a, B>>,
 }
 
-pub enum Fragment<'a, B> 
+pub(crate) enum Fragment<'a, B> 
 where 
     B: ?Sized + 'a + ToOwned
 {
@@ -69,24 +98,29 @@ where
 
 impl<'a, T, B> LazyConcat<'a, T, B> 
 where
+    // TODO Remove Default requirement. This could be done by putting root in an Option perhaps.
     T: Concat<Cow<'a, B>> + Borrow<B> + Default + Length,
     B: ToOwned<Owned = T> + ?Sized + Length,
 {
+    /// Construct a new `LazyConcat`. The initial value should be an owned value, such as a `Vec` or 
+    /// a `String`. This can be empty but it doesn't have to be.
     pub fn new(initial: T) -> Self {
         LazyConcat { root: initial, fragments: Vec::new() }
     }
     
+    /// Construct a new `LazyConcat`, but preallocate the vector of fragments with the expected number
+    /// of fragments, so that won't need to be reallocated as fragments are added.
     pub fn expecting_num_fragments(initial: T, n: usize) -> Self {
         LazyConcat { root: initial, fragments: Vec::with_capacity(n) }
     }
 
+    /// Fully normalize the collection by concatenating every fragament onto the base.
     pub fn normalize(&mut self) {
         self.normalize_range(..);
     }
 
     fn normalize_range<R: RangeBounds<usize>>(&mut self, range: R) {
         let fragments = self.fragments.drain(range);
-        // TODO Remove Default requirement. This could be done by putting root in an Option perhaps.
         let root = mem::replace(&mut self.root, Default::default());
         self.root = fragments.fold(root, |agg, frag| agg.concat(frag.get()));
     }
@@ -112,20 +146,44 @@ where
         }
     }
 
-    // TODO replace from/to optionals with ranges: .., a.., ..b, a..=b etc
-    pub fn get_slice<R: RangeBounds<usize>>(&mut self, range: R) -> &B
+    /// The amount of data (in bytes) that has already been normalized. This is the maximum length 
+    /// of a slice that can be taken without first calling `normalize()` or `normalize_to_len()`.
+    #[inline]
+    pub fn get_normalized_len(&self) -> usize {
+        self.root.len()
+    }
+
+    /// Checks if any normalization is required before taking a slice
+    /// 
+    /// # Examples
+    /// ```
+    /// # use lazy_concat::LazyConcat;
+    /// # let mut lz = LazyConcat::new(Vec::new())
+    /// #   .concat(&[0,1,2,3,4,5,6][..]);
+    /// if lz.slice_needs_normalization(1..3) {
+    ///     lz.normalize_to_len(4);
+    /// }
+    /// let slice = lz.get_slice(1..3);
+    /// ```
+    /// 
+    #[inline]
+    pub fn slice_needs_normalization<R: RangeBounds<usize>>(&mut self, range: R) -> bool {
+        match range.end_bound() {
+            Bound::Unbounded => self.fragments.len() == 0,
+            Bound::Excluded(&n) => self.root.len() < n,
+            Bound::Included(&n) => self.root.len() <= n,
+        }
+    }
+
+    /// Get a slice from the normalized data. Before calling this method you should check that the size of
+    /// the normalized data is sufficient to be able to support this slice and, if necessary normalizing 
+    /// the data to the required size using `normalize_to_len()`.
+    /// # Panics
+    /// Panics when the range falls outside the size of the owned data.
+    pub fn get_slice<R: RangeBounds<usize>>(&self, range: R) -> &B
     where 
         T: Sliceable<Slice = B>
     {
-        match range.end_bound() {
-            Bound::Unbounded => self.normalize(),
-            Bound::Excluded(&n) => {
-                self.normalize_to_len(n).expect("Cannot make slice: Out of bounds!");
-            },
-            Bound::Included(&n) => {
-                self.normalize_to_len(n + 1).expect("Cannot make slice: Out of bounds!");
-            }
-        }
         self.root.get_slice(range)
     }
 
@@ -138,15 +196,39 @@ where
             .map(Fragment::borrow))
     }
 
+    /// Consume the LazyConcat, concatenate all of the fragments and return the owned, fully normalized data.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// # use lazy_concat::LazyConcat;
+    /// let lz = LazyConcat::new(String::from("abc"))
+    ///     .concat("def")
+    ///     .concat("ghi");
+    /// 
+    /// let result: String = lz.done();
+    /// assert_eq!("abcdefghi", result);
+    /// ```
     #[inline]
     pub fn done(mut self) -> T {
         self.normalize();
         self.root
     }
 
+    /// Lazily concatenate an owned or borrowed fragment of data. No data will be moved or copied until the
+    /// next time that `normalize()` or `normalize_to_len()` is called.
+    /// 
+    /// This is the same as `concat_in_place` except that it consumes and returns self, allowing for 
+    /// method chaining.
     pub fn concat<F: Into<Cow<'a, B>>>(mut self, fragment: F) -> Self {
-        self.fragments.push(Fragment::Value(fragment.into()));
+        self.concat_in_place(fragment);
         self
+    }
+    
+    /// Lazily concatenate an owned or borrowed fragment of data. No data will be moved or copied until the
+    /// next time that `normalize()` or `normalize_to_len()` is called.
+    pub fn concat_in_place<F: Into<Cow<'a, B>>>(&mut self, fragment: F) {
+        self.fragments.push(Fragment::Value(fragment.into()));
     }
 }
 
@@ -186,10 +268,8 @@ impl<'a> LazyConcat<'a, String, str> {
 
 impl<'a, T, B> Debug for LazyConcat<'a, T, B> 
 where
-    T: Concat<Cow<'a, B>> + Borrow<B>,
-    B: ToOwned<Owned = T> + ?Sized,
-    T: Debug,
-    B: Debug,
+    T: Concat<Cow<'a, B>> + Borrow<B> + Debug,
+    B: ToOwned<Owned = T> + ?Sized + Debug,
 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "LazyConcat {{ {:?}", &self.root)?;
@@ -213,7 +293,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::LazyConcat;
 
     #[test]
     fn test_1() {
@@ -307,18 +387,25 @@ mod tests {
         let mut lz = LazyConcat::new(Vec::new())
             .concat(&a)
             .concat(&b)
-            .concat(&c)
-            .concat(&d);
-        assert_eq!("LazyConcat { [], [1, 2, 3], [4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
+            .concat(&c);
+
         {
-            let slice = lz.get_slice(1 .. 4);
+            assert_eq!(0, lz.get_normalized_len());
+            assert_eq!(true, lz.slice_needs_normalization(1..4));
+            assert_eq!("LazyConcat { [], [1, 2, 3], [4, 5], [6, 7, 8] }", format!("{:?}", lz));
+
+            lz.normalize_to_len(4);
+            assert_eq!(false, lz.slice_needs_normalization(1..4));
+            assert_eq!("LazyConcat { [1, 2, 3, 4, 5], [6, 7, 8] }", format!("{:?}", lz));
+            let slice = lz.get_slice(1..4);
             assert_eq!(vec![2,3,4], slice);
+            assert_eq!(5, lz.get_normalized_len());
         }
-        assert_eq!("LazyConcat { [1, 2, 3, 4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
+        lz = lz.concat(&d);
+        assert_eq!("LazyConcat { [1, 2, 3, 4, 5], [6, 7, 8], [9] }", format!("{:?}", &lz));
         {
             let slice = lz.get_slice(2 .. 3);
             assert_eq!(vec![3], slice);
         }
-        assert_eq!("LazyConcat { [1, 2, 3, 4, 5], [6, 7, 8], [9] }", format!("{:?}", lz));
     }
 }

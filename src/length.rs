@@ -1,5 +1,10 @@
+/// 
+/// A trait for types whose values have a length, in bytes.
+/// 
+
 pub trait Length 
 {
+    /// The size of the object in bytes
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0

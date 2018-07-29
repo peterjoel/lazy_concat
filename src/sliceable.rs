@@ -1,18 +1,16 @@
-#![feature(collections_range)]
-#![feature(slice_get_slice)]
+/// A trait for types that can have slices taken from them.
 
 use ::length::Length;
 use std::ops::{Bound, RangeBounds};
 
 pub trait Sliceable: Length {
     type Slice: ?Sized;
-    // TODO: Replace this with SliceIndex, RangeBounds when stable
     fn get_slice<R>(&self, range: R) -> &Self::Slice
     where 
         R: RangeBounds<usize>;
 }
 
-fn check_bounds<T, R>(target: &T, range: R) -> (usize, usize)
+fn bounds<T, R>(target: &T, range: R) -> (usize, usize)
 where
     T: Length,
     R: RangeBounds<usize>,
@@ -40,7 +38,7 @@ impl<T> Sliceable for Vec<T> {
     where
         R: RangeBounds<usize>
     {
-        let (start, end) = check_bounds(self, range);
+        let (start, end) = bounds(self, range);
         &self[start .. end]
     }
 }
@@ -51,7 +49,7 @@ impl Sliceable for String {
     where
         R: RangeBounds<usize>
     {
-        let (start, end) = check_bounds(self, range);
+        let (start, end) = bounds(self, range);
         &self[start .. end]
     }
 }
