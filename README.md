@@ -5,7 +5,7 @@ Lazy concatenation to `String` or `Vec`, supporting iteration and slices.
 
 ```Toml
 [dependencies]
-lazy_concat = "0.1.0"
+lazy_concat = "0.1.1"
 ```
 
 ```Rust
