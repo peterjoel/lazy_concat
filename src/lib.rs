@@ -67,7 +67,7 @@ where
     #[inline]
     fn get(self) -> Cow<'a, B> {
         match self {
-            Fragment::Value(b) => b
+            Fragment::Value(b) => b,
         }
     }
 
@@ -233,15 +233,28 @@ where
 }
 
 impl<'a> LazyConcat<'a, String, str> {
+    /// Creates an iterator over the `char`s of the String and any concatenated fragments.
+    /// No normalization needs to be done for this to work.
     pub fn chars<'b>(&'b self) -> impl Iterator<Item = char> + 'b {
         self.fragments_iter()
             .flat_map(|fragment| {
                 fragment.chars()
             })
     }
+
+    /// Creates an iterator over the raw bytes of the String and any concatenated fragments.
+    /// No normalization needs to be done for this to work.
+    pub fn bytes<'b>(&'b self) -> impl Iterator<Item = u8> + 'b {
+        self.fragments_iter()
+            .flat_map(|fragment| {
+                fragment.bytes()
+            })
+    }
 }
 
 impl<'a, I: Clone> LazyConcat<'a, Vec<I>, [I]> {
+    /// Creates an iterator over references to items of a Vec and any concatenated fragments.
+    /// No normalization needs to be done for this to work.
     pub fn iter(&self) -> impl Iterator<Item = &I> {
         self.fragments_iter()
             .flat_map(|slice| {
@@ -249,6 +262,8 @@ impl<'a, I: Clone> LazyConcat<'a, Vec<I>, [I]> {
             })
     }
 
+    /// Creates an iterator over the owned items of a Vec and any concatenated fragments.
+    /// No normalization needs to be done for this to work.
     pub fn into_iter<'b>(&'b self) -> impl Iterator<Item = I> + 'b {
         self.fragments_iter()
             .flat_map(|fragment| {
@@ -257,14 +272,6 @@ impl<'a, I: Clone> LazyConcat<'a, Vec<I>, [I]> {
     }
 }
 
-impl<'a> LazyConcat<'a, String, str> {
-    pub fn bytes<'b>(&'b self) -> impl Iterator<Item = u8> + 'b {
-        self.fragments_iter()
-            .flat_map(|fragment| {
-                fragment.bytes()
-            })
-    }
-}
 
 impl<'a, T, B> Debug for LazyConcat<'a, T, B> 
 where

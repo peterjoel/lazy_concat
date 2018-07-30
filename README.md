@@ -1,7 +1,12 @@
 # lazy_concat
-Lazy `String` and `Vec` concatenation with iteration and slices.
+Lazy concatenation to `String` or `Vec`, supporting iteration and slices.
 
-## Basic Usage
+## Usage
+
+```Toml
+[dependencies]
+lazy_concat = "0.1.0"
+```
 
 ```Rust
 extern crate lazy_concat;
@@ -13,7 +18,12 @@ let lazy_string: String = LazyConcat::new(String::new())
     .concat(" ")
     .concat("there!");
 
-// Until here, when the String is constructed
+// Iteration works without
+for c in lazy_string.chars() {
+    println!("c = {:?}", c);
+}
+
+// Finally allocate and concatenate the whole string
 let string: String = lazy_string.done()
 ```
 
