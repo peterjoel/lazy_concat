@@ -1,6 +1,11 @@
 [package]
 name = "lazy_concat"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Peter Hall <peterjoel@gmail.com>"]
+description = "Lazy concatenation for Strings and Vecs"
+categories = ["data-structures", "caching"]
+keywords = ["lazy", "concatenation", "append", "collection", "slice"]
+license = "MIT"
+repository = "https://github.com/peterjoel/lazy_concat"
 
 [dependencies]
