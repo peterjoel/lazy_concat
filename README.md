@@ -1,6 +1,9 @@
 # lazy_concat
 Lazy concatenation to `String` or `Vec`, supporting iteration and slices.
 
+## Documentation
+Automatic generated [documentation can be found here](https://docs.rs/lazy_concat/latest/lazy_concat/).
+
 ## Usage
 
 ```Toml
