@@ -5,9 +5,14 @@ use std::ops::{Bound, RangeBounds};
 
 pub trait Sliceable: Length {
     type Slice: ?Sized;
+
     fn get_slice<R>(&self, range: R) -> &Self::Slice
     where 
         R: RangeBounds<usize>;
+
+    fn as_ptr(&self) -> *const Self::Slice {
+        self.get_slice(..)
+    }
 }
 
 fn bounds<T, R>(target: &T, range: R) -> (usize, usize)
@@ -19,7 +24,7 @@ where
     let start = match range.start_bound() {
         Bound::Unbounded => 0,
         Bound::Included(n) => *n,
-        _ => unreachable!(),
+        _ => unreachable!("Range `start_bound()` unexpectedly of variant `Bound::Excluded`"),
     };
     let end = match range.end_bound() {
         Bound::Unbounded => len,
@@ -27,7 +32,6 @@ where
         Bound::Excluded(n) => *n,
     };
     assert!(start <= end);
-    println!("end = {}, len = {}, range = {:?}", end, len, range.end_bound());
     assert!(end <= len);
     (start, end)
 }
@@ -54,7 +58,6 @@ impl Sliceable for String {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -65,7 +68,8 @@ mod test {
         let slice: &[u32] = vec.get_slice(1..3);
         assert_eq!(vec![1, 2], slice);
     }
-        #[test]
+
+    #[test]
     fn test_vec_unbounded() {
         let vec = vec![0,1,2,3,4,5];
         let slice: &[u32] = vec.get_slice(3..);

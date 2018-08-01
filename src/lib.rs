@@ -231,6 +231,55 @@ where
     pub fn concat_in_place<F: Into<Cow<'a, B>>>(&mut self, fragment: F) {
         self.fragments.push(Fragment::Value(fragment.into()));
     }
+
+    /// Splits the currently normalized portion into a separate borrow from the LazyConcat. This allows you
+    /// continue concatenating fragments while holding immutable slices to the normalized portion.
+    ///
+    /// The LazyConcat object returned from this method is wrapped and the only method available is
+    /// `concat_in_place()`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use lazy_concat::LazyConcat;
+    /// let a = vec![0,1,2,3,4];
+    /// let mut lz = LazyConcat::new(Vec::new())
+    ///     .concat(&a);
+    ///
+    /// lz.normalize();
+    /// // New block scope to control the lifespan of the variables
+    /// {
+    ///     let (norm, mut lz) = lz.split_normalized();
+    ///     let slice = &norm[0..];
+    ///     // Still possible to concatenate while holding a slice
+    ///     lz.concat_in_place(vec![99]);
+    ///     assert_eq!(vec![0,1,2,3,4], slice);
+    /// }
+    /// assert_eq!(vec![0,1,2,3,4,99], lz.done());
+    /// ```
+    ///
+    pub fn split_normalized<'b>(&'b mut self) -> (&'b B, ConcatInPlace<&'b mut LazyConcat<'a, T, B>>)
+    where
+        T: Sliceable<Slice = B>,
+    {
+        // This is safe because:
+        //  1. The returned slice into self.root is immutable
+        //  2. ConcatInPlace is mutable but only has one method, which does move or mutate the slice 
+        let norm = unsafe { &*self.root.as_ptr() };
+        (norm, ConcatInPlace(self))
+    }
+}
+
+pub struct ConcatInPlace<T>(T);
+
+impl<'a, 'b, T, B> ConcatInPlace<&'b mut LazyConcat<'a, T, B>>
+where
+    T: Concat<Cow<'a, B>> + Borrow<B> + Default + Length,
+    B: ToOwned<Owned = T> + ?Sized + Length,
+{
+    pub fn concat_in_place<F: Into<Cow<'a, B>>>(&mut self, fragment: F) {   
+        self.0.concat_in_place(fragment);
+    }
 }
 
 impl<'a> LazyConcat<'a, String, str> {
@@ -272,7 +321,6 @@ impl<'a, I: Clone> LazyConcat<'a, Vec<I>, [I]> {
             })
     }
 }
-
 
 impl<'a, T, B> Debug for LazyConcat<'a, T, B> 
 where
@@ -415,5 +463,22 @@ mod tests {
             let slice = lz.get_slice(2 .. 3);
             assert_eq!(vec![3], slice);
         }
+    }
+
+    #[test]
+    fn split_normalized_mut() {
+        let a = vec![0,1,2,3,4];
+        let mut lz = LazyConcat::new(Vec::new())
+            .concat(&a);
+
+        lz.normalize();
+        {
+            let (root, mut lz) = lz.split_normalized();
+            let slice = &root[0..];
+            // Still possible to concatenate while holding a slice
+            lz.concat_in_place(vec![99]);
+            assert_eq!(vec![0,1,2,3,4], slice);
+        }
+        assert_eq!(vec![0,1,2,3,4,99], lz.done());
     }
 }
