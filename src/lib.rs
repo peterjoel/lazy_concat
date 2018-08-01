@@ -1,9 +1,10 @@
 //!
 //! Lazy concatenation of `String`s, `Vec`s and any other concatenable data structures. 
 //! 
-//! A `LazyConcat` owns a base structure and keeps track of fragments which can be 
+//! A [`LazyConcat`] owns a base structure and keeps track of fragments which can be 
 //! either borrowed or owned. The fragments are never actually concatenated until the 
-//! structure is normalized with `normalize()` or partially with `normalize_to_len()`.
+//! structure is fully normalized with [`normalize`](LazyConcat::normalize) or 
+//! partially normalized with [`normalize_to_len`](LazyConcat::normalize_to_len).
 //! 
 //! When borrowing a slice, it is possible to normalize only the minimum number of 
 //! fragments required for the slice. Various iterators over `String` or `Vec` are 
@@ -103,13 +104,13 @@ where
     T: Concat<Cow<'a, B>> + Borrow<B> + Default + Length,
     B: ToOwned<Owned = T> + ?Sized + Length,
 {
-    /// Construct a new `LazyConcat`. The initial value should be an owned value, such as a `Vec` or 
+    /// Construct a new [`LazyConcat`]. The initial value should be an owned value, such as a `Vec` or 
     /// a `String`. This can be empty but it doesn't have to be.
     pub fn new(initial: T) -> Self {
         LazyConcat { root: initial, fragments: Vec::new() }
     }
     
-    /// Construct a new `LazyConcat`, but preallocate the vector of fragments with the expected number
+    /// Construct a new [`LazyConcat`], but preallocate the vector of fragments with the expected number
     /// of fragments, so that won't need to be reallocated as fragments are added.
     pub fn expecting_num_fragments(initial: T, n: usize) -> Self {
         LazyConcat { root: initial, fragments: Vec::with_capacity(n) }
@@ -148,7 +149,7 @@ where
     }
 
     /// The amount of data (in bytes) that has already been normalized. This is the maximum length 
-    /// of a slice that can be taken without first calling `normalize()` or `normalize_to_len()`.
+    /// of a slice that can be taken without first calling [`normalize`] or [`normalize_to_len`].
     #[inline]
     pub fn get_normalized_len(&self) -> usize {
         self.root.len()
@@ -178,7 +179,7 @@ where
 
     /// Get a slice from the normalized data. Before calling this method you should check that the size of
     /// the normalized data is sufficient to be able to support this slice and, if necessary normalizing 
-    /// the data to the required size using `normalize_to_len()`.
+    /// the data to the required size using [`normalize_to_len`].
     /// # Panics
     /// Panics when the range falls outside the size of the owned data.
     pub fn get_slice<R: RangeBounds<usize>>(&self, range: R) -> &B
@@ -217,9 +218,9 @@ where
     }
 
     /// Lazily concatenate an owned or borrowed fragment of data. No data will be moved or copied until the
-    /// next time that `normalize()` or `normalize_to_len()` is called.
+    /// next time that [`normalize`] or [`normalize_to_len`] is called.
     /// 
-    /// This is the same as `concat_in_place` except that it consumes and returns self, allowing for 
+    /// This is the same as [`concat_in_place`] except that it consumes and returns self, allowing for 
     /// method chaining.
     pub fn concat<F: Into<Cow<'a, B>>>(mut self, fragment: F) -> Self {
         self.concat_in_place(fragment);
@@ -227,16 +228,22 @@ where
     }
     
     /// Lazily concatenate an owned or borrowed fragment of data. No data will be moved or copied until the
-    /// next time that `normalize()` or `normalize_to_len()` is called.
+    /// next time that [`normalize`](LazyConcat::normalize) or [`normalize_to_len`](LazyConcat::normalize_to_len) 
+    /// is called.
     pub fn concat_in_place<F: Into<Cow<'a, B>>>(&mut self, fragment: F) {
         self.fragments.push(Fragment::Value(fragment.into()));
     }
 
-    /// Splits the currently normalized portion into a separate borrow from the LazyConcat. This allows you
-    /// continue concatenating fragments while holding immutable slices to the normalized portion.
-    ///
-    /// The LazyConcat object returned from this method is wrapped and the only method available is
-    /// `concat_in_place()`.
+    /// Splits the into two parts:
+    /// 
+    ///  * An immutable borrow of the normalized concatenation of the root.
+    ///  * A mutable view, [`ConcatOnly`], which permits further lazy concatenation, using 
+    /// [`concat_in_place`](LazyConcat::concat_in_place), but no other mutation.
+    /// 
+    /// This lets you keep hold of a slice into the normalized root, while still allowing further contatenation
+    /// of fragments. This would not otherwise be possible because [`concat`](LazyConcat::concat) takes 
+    /// [`LazyConcat`] by value and [`concat_in_place`](LazyConcat::concat_in_place) takes it by mutable 
+    /// reference, preventing slices into the normalized root to exist. 
     ///
     /// # Examples
     ///
@@ -258,21 +265,25 @@ where
     /// assert_eq!(vec![0,1,2,3,4,99], lz.done());
     /// ```
     ///
-    pub fn split_normalized<'b>(&'b mut self) -> (&'b B, ConcatInPlace<&'b mut LazyConcat<'a, T, B>>)
+    pub fn split_normalized<'b>(&'b mut self) -> (&'b B, ConcatOnly<&'b mut LazyConcat<'a, T, B>>)
     where
         T: Sliceable<Slice = B>,
     {
         // This is safe because:
         //  1. The returned slice into self.root is immutable
-        //  2. ConcatInPlace is mutable but only has one method, which does move or mutate the slice 
+        //  2. ConcatOnly is mutable but only has one method, which does move or mutate the slice 
         let norm = unsafe { &*self.root.as_ptr() };
-        (norm, ConcatInPlace(self))
+        (norm, ConcatOnly(self))
     }
 }
 
-pub struct ConcatInPlace<T>(T);
+/// Provides a mutable view onto a [`LazyConcat`] which permits new lazy concatentation but not 
+/// normalization.
+/// 
+/// This `struct` is created by the [`split_normalized`](`LazyConcat::split_normalized`) method.
+pub struct ConcatOnly<T>(T);
 
-impl<'a, 'b, T, B> ConcatInPlace<&'b mut LazyConcat<'a, T, B>>
+impl<'a, 'b, T, B> ConcatOnly<&'b mut LazyConcat<'a, T, B>>
 where
     T: Concat<Cow<'a, B>> + Borrow<B> + Default + Length,
     B: ToOwned<Owned = T> + ?Sized + Length,
