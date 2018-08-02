@@ -17,9 +17,9 @@ use lazy_concat::LazyConcat;
 
 let mut lazy_string = LazyConcat::new(String::new())
     // No allocations happen here
-    .concat("Hello")
-    .concat(" ")
-    .concat("there!");
+    .and_concat("Hello")
+    .and_concat(" ")
+    .and_concat("there!");
 
 // Iteration works without any new allocation
 for byte in lazy_string.bytes() {

@@ -16,10 +16,10 @@
 //! # use lazy_concat::LazyConcat;
 //! let mut lz = LazyConcat::new(Vec::new())
 //!     // Concatenating owned values
-//!     .concat(vec![0, 1, 2, 3, 4])
+//!     .and_concat(vec![0, 1, 2, 3, 4])
 //!     // And borrowed values
-//!     .concat(&[5, 6, 7, 8][..])
-//!     .concat(&[9, 10][..]);
+//!     .and_concat(&[5, 6, 7, 8][..])
+//!     .and_concat(&[9, 10][..]);
 //! // This is possible without the above slice being concatenated
 //! for i in lz.iter() {
 //!     println!("i = {}", i);
@@ -161,7 +161,7 @@ where
     /// ```
     /// # use lazy_concat::LazyConcat;
     /// # let mut lz = LazyConcat::new(Vec::new())
-    /// #   .concat(&[0,1,2,3,4,5,6][..]);
+    /// #   .and_concat(&[0,1,2,3,4,5,6][..]);
     /// if lz.slice_needs_normalization(1..3) {
     ///     lz.normalize_to_len(4);
     /// }
@@ -205,8 +205,8 @@ where
     /// ```
     /// # use lazy_concat::LazyConcat;
     /// let lz = LazyConcat::new(String::from("abc"))
-    ///     .concat("def")
-    ///     .concat("ghi");
+    ///     .and_concat("def")
+    ///     .and_concat("ghi");
     /// 
     /// let result: String = lz.done();
     /// assert_eq!("abcdefghi", result);
@@ -220,30 +220,30 @@ where
     /// Lazily concatenate an owned or borrowed fragment of data. No data will be moved or copied until the
     /// next time that [`normalize`] or [`normalize_to_len`] is called.
     /// 
-    /// This is the same as [`concat_in_place`] except that it consumes and returns self, allowing for 
+    /// This is the same as [`concat`] except that it consumes and returns self, allowing for 
     /// method chaining.
-    pub fn concat<F: Into<Cow<'a, B>>>(mut self, fragment: F) -> Self {
-        self.concat_in_place(fragment);
+    pub fn and_concat<F: Into<Cow<'a, B>>>(mut self, fragment: F) -> Self {
+        self.concat(fragment);
         self
     }
     
     /// Lazily concatenate an owned or borrowed fragment of data. No data will be moved or copied until the
     /// next time that [`normalize`](LazyConcat::normalize) or [`normalize_to_len`](LazyConcat::normalize_to_len) 
     /// is called.
-    pub fn concat_in_place<F: Into<Cow<'a, B>>>(&mut self, fragment: F) {
+    pub fn concat<F: Into<Cow<'a, B>>>(&mut self, fragment: F) {
         self.fragments.push(Fragment::Value(fragment.into()));
     }
 
-    /// Splits the into two parts:
+    /// Splits the `LazyConcat` into two parts:
     /// 
     ///  * An immutable borrow of the normalized concatenation of the root.
     ///  * A mutable view, [`ConcatOnly`], which permits further lazy concatenation, using 
-    /// [`concat_in_place`](LazyConcat::concat_in_place), but no other mutation.
+    /// [`concat`](LazyConcat::concat), but no other mutation.
     /// 
-    /// This lets you keep hold of a slice into the normalized root, while still allowing further contatenation
-    /// of fragments. This would not otherwise be possible because [`concat`](LazyConcat::concat) takes 
-    /// [`LazyConcat`] by value and [`concat_in_place`](LazyConcat::concat_in_place) takes it by mutable 
-    /// reference, preventing slices into the normalized root to exist. 
+    /// This lets you keep hold of a slice into the normalized root, while still allowing further concatenation
+    /// of fragments. This would not otherwise be possible because [`and_concat`](LazyConcat::and_concat) consumes 
+    /// `self` and [`concat`](LazyConcat::concat) takes `&mut self`, preventing slices into 
+    /// the normalized root to exist.
     ///
     /// # Examples
     ///
@@ -251,7 +251,7 @@ where
     /// # use lazy_concat::LazyConcat;
     /// let a = vec![0,1,2,3,4];
     /// let mut lz = LazyConcat::new(Vec::new())
-    ///     .concat(&a);
+    ///     .and_concat(&a);
     ///
     /// lz.normalize();
     /// // New block scope to control the lifespan of the variables
@@ -259,7 +259,7 @@ where
     ///     let (norm, mut lz) = lz.split_normalized();
     ///     let slice = &norm[0..];
     ///     // Still possible to concatenate while holding a slice
-    ///     lz.concat_in_place(vec![99]);
+    ///     lz.concat(vec![99]);
     ///     assert_eq!(vec![0,1,2,3,4], slice);
     /// }
     /// assert_eq!(vec![0,1,2,3,4,99], lz.done());
@@ -288,8 +288,8 @@ where
     T: Concat<Cow<'a, B>> + Borrow<B> + Default + Length,
     B: ToOwned<Owned = T> + ?Sized + Length,
 {
-    pub fn concat_in_place<F: Into<Cow<'a, B>>>(&mut self, fragment: F) {   
-        self.0.concat_in_place(fragment);
+    pub fn concat<F: Into<Cow<'a, B>>>(&mut self, fragment: F) {   
+        self.0.concat(fragment);
     }
 }
 
@@ -368,9 +368,9 @@ mod tests {
         let b = "lo the";
         let c = "re!";
         let mut lz = LazyConcat::new(String::new())
-            .concat(a)
-            .concat(b.to_owned())
-            .concat(c);
+            .and_concat(a)
+            .and_concat(b.to_owned())
+            .and_concat(c);
 
         assert_eq!("LazyConcat { \"\", \"hel\", \"lo the\", \"re!\" }", format!("{:?}", lz));
 
@@ -387,9 +387,9 @@ mod tests {
         let b = "lo the";
         let c = "re!";
         let mut lz = LazyConcat::new(String::new())
-            .concat(a)
-            .concat(b.to_owned())
-            .concat(c);
+            .and_concat(a)
+            .and_concat(b.to_owned())
+            .and_concat(c);
         let res = lz.normalize_to_len(6);
         assert_eq!(Some(9), res);
         assert_eq!("LazyConcat { \"hello the\", \"re!\" }", format!("{:?}", lz));
@@ -401,9 +401,9 @@ mod tests {
         let b = "lo the";
         let c = "re!";
         let lz = LazyConcat::new(String::new())
-            .concat(a)
-            .concat(b.to_owned())
-            .concat(c);
+            .and_concat(a)
+            .and_concat(b.to_owned())
+            .and_concat(c);
 
         let chars: Vec<char> = lz.chars().collect();
         assert_eq!(vec!['h', 'e', 'l', 'l', 'o', ' ', 't', 'h', 'e', 'r', 'e', '!'], chars);
@@ -417,9 +417,9 @@ mod tests {
         let b = "網";
         let c = "网";
         let lz = LazyConcat::new(String::new())
-            .concat(a)
-            .concat(b.to_owned())
-            .concat(c);
+            .and_concat(a)
+            .and_concat(b.to_owned())
+            .and_concat(c);
 
         let chars: Vec<u8> = lz.bytes().collect();
         assert_eq!(vec![229, 189, 162, 232, 129, 178, 231, 182, 178, 231, 189, 145], chars);
@@ -434,10 +434,10 @@ mod tests {
         let c = vec![6,7,8];
         let d = vec![9];
         let lz = LazyConcat::new(Vec::new())
-            .concat(&a)
-            .concat(&b)
-            .concat(&c)
-            .concat(&d);
+            .and_concat(&a)
+            .and_concat(&b)
+            .and_concat(&c)
+            .and_concat(&d);
 
         let v: Vec<u32> = lz.iter().cloned().collect();
         assert_eq!(vec![1, 2, 3, 4, 5, 6, 7, 8, 9], v);
@@ -452,9 +452,9 @@ mod tests {
         let c = vec![6,7,8];
         let d = vec![9];
         let mut lz = LazyConcat::new(Vec::new())
-            .concat(&a)
-            .concat(&b)
-            .concat(&c);
+            .and_concat(&a)
+            .and_concat(&b)
+            .and_concat(&c);
 
         {
             assert_eq!(0, lz.get_normalized_len());
@@ -468,7 +468,7 @@ mod tests {
             assert_eq!(vec![2,3,4], slice);
             assert_eq!(5, lz.get_normalized_len());
         }
-        lz = lz.concat(&d);
+        lz.concat(&d);
         assert_eq!("LazyConcat { [1, 2, 3, 4, 5], [6, 7, 8], [9] }", format!("{:?}", &lz));
         {
             let slice = lz.get_slice(2 .. 3);
@@ -480,14 +480,14 @@ mod tests {
     fn split_normalized_mut() {
         let a = vec![0,1,2,3,4];
         let mut lz = LazyConcat::new(Vec::new())
-            .concat(&a);
+            .and_concat(&a);
 
         lz.normalize();
         {
             let (root, mut lz) = lz.split_normalized();
             let slice = &root[0..];
             // Still possible to concatenate while holding a slice
-            lz.concat_in_place(vec![99]);
+            lz.concat(vec![99]);
             assert_eq!(vec![0,1,2,3,4], slice);
         }
         assert_eq!(vec![0,1,2,3,4,99], lz.done());
