@@ -149,7 +149,8 @@ where
     }
 
     /// The amount of data (in bytes) that has already been normalized. This is the maximum length 
-    /// of a slice that can be taken without first calling [`normalize`] or [`normalize_to_len`].
+    /// of a slice that can be taken without first calling [`normalize`](LazyConcat::normalize) or 
+    /// [`normalize_to_len`](LazyConcat::normalize_to_len).
     #[inline]
     pub fn get_normalized_len(&self) -> usize {
         self.root.len()
@@ -179,7 +180,7 @@ where
 
     /// Get a slice from the normalized data. Before calling this method you should check that the size of
     /// the normalized data is sufficient to be able to support this slice and, if necessary normalizing 
-    /// the data to the required size using [`normalize_to_len`].
+    /// the data to the required size using [`normalize_to_len`](LazyConcat::normalize_to_len).
     /// # Panics
     /// Panics when the range falls outside the size of the owned data.
     pub fn get_slice<R: RangeBounds<usize>>(&self, range: R) -> &B
@@ -218,7 +219,7 @@ where
     }
 
     /// Lazily concatenate an owned or borrowed fragment of data. No data will be moved or copied until the
-    /// next time that [`normalize`] or [`normalize_to_len`] is called.
+    /// next time that [`normalize`](LazyConcat::normalize) or [`normalize_to_len`](LazyConcat::normalize_to_len) is called.
     /// 
     /// This is the same as [`concat`] except that it consumes and returns self, allowing for 
     /// method chaining.
