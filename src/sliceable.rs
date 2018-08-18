@@ -24,7 +24,7 @@ where
     let start = match range.start_bound() {
         Bound::Unbounded => 0,
         Bound::Included(n) => *n,
-        _ => unreachable!("Range `start_bound()` unexpectedly of variant `Bound::Excluded`"),
+        Bound::Excluded(n) => *n + 1,
     };
     let end = match range.end_bound() {
         Bound::Unbounded => len,

@@ -1,0 +1,26 @@
+
+
+Fragments<T, F>
+    fragments: Vec<Fragment<F>>;
+
+    fn new() -> Fragments;
+    fn concat(&mut self, f: F);
+    fn and_concat(self, f: F) -> Self;
+    fn normalize(&mut self, root: &mut T);
+    fn normalize_to_len(&mut self, root: &mut T);
+
+    fn to_lazy_concat(root: T) -> LazyConcat;
+
+T
+    fn to_lazy_concat(self) -> LazyConcat;
+
+LazyConcat
+    root: T;
+    fragments: Fragments;
+
+    fn new(root: T) -> LazyConcat;
+    fn new_empty() where T: Default;
+    
+    fn split_normal(&mut self) -> (&T, &mut Fragments);
+    fn done(self) -> T;
+

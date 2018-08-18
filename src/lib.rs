@@ -32,11 +32,11 @@
 //! 
 //! 
 use std::{
-    fmt::{self, Debug, Formatter},
     borrow::{Cow, Borrow},
-    ops::{RangeBounds, Bound},
-    mem,
+    fmt::{self, Debug, Formatter},
     iter,
+    mem,
+    ops::{Bound, RangeBounds},
 };
 
 pub(crate) mod concat;
@@ -183,15 +183,16 @@ where
     /// the data to the required size using [`normalize_to_len`](LazyConcat::normalize_to_len).
     /// # Panics
     /// Panics when the range falls outside the size of the owned data.
-    pub fn get_slice<R: RangeBounds<usize>>(&self, range: R) -> &B
-    where 
-        T: Sliceable<Slice = B>
+    pub fn get_slice<R>(&self, range: R) -> &B
+    where
+        R: RangeBounds<usize>,
+        T: Sliceable<Slice = B>,
     {
         self.root.get_slice(range)
     }
 
     fn fragments_iter(&self) -> impl Iterator<Item = &B>
-    where 
+    where
         T: Sliceable<Slice = B>
     {
         iter::once(self.root.get_slice(..))
