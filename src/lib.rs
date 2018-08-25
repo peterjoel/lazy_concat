@@ -279,7 +279,7 @@ where
     }
 }
 
-/// Provides a mutable view onto a [`LazyConcat`] which permits new lazy concatentation but not 
+/// Provides a mutable view onto a [`LazyConcat`] which permits new lazy concatenation but not
 /// normalization.
 /// 
 /// This `struct` is created by the [`split_normalized`](`LazyConcat::split_normalized`) method.
@@ -292,6 +292,11 @@ where
 {
     pub fn concat<F: Into<Cow<'a, B>>>(&mut self, fragment: F) {   
         self.0.concat(fragment);
+    }
+
+    pub fn and_concat<F: Into<Cow<'a, B>>>(self, fragment: F) -> Self {
+        self.0.concat(fragment);
+        self
     }
 }
 
@@ -489,9 +494,10 @@ mod tests {
             let (root, mut lz) = lz.split_normalized();
             let slice = &root[0..];
             // Still possible to concatenate while holding a slice
-            lz.concat(vec![99]);
+            lz = lz.and_concat(vec![99]);
+            lz.concat(vec![100]);
             assert_eq!(vec![0,1,2,3,4], slice);
         }
-        assert_eq!(vec![0,1,2,3,4,99], lz.done());
+        assert_eq!(vec![0,1,2,3,4,99,100], lz.done());
     }
 }
